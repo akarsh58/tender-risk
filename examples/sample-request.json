@@ -1,0 +1,22 @@
+{
+  "PROJECT_CONTEXT": "Construction of a G+5 residential building under a lump-sum contract. Perspective: contractor/bidder.",
+  "QUESTION_OR_MODE": "FULL_RISK_SCAN",
+  "RISK_CATEGORIES": [
+    "Payment",
+    "Liquidated Damages",
+    "Termination",
+    "Performance Security",
+    "Scope & Variations",
+    "Claims & Disputes",
+    "Defects & Warranty"
+  ],
+  "CONTEXT_CLAUSES": [
+    {
+      "clause_id": "C-0012",
+      "heading": "Interim Payments",
+      "page": "23",
+      "text": "The Employer shall certify each valid interim payment application within 21 days of receipt. The Employer may withhold amounts that are disputed in writing."
+    }
+  ]
+}
+

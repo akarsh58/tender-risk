@@ -1,0 +1,276 @@
+{
+  "$defs": {
+    "AmbiguousClause": {
+      "additionalProperties": false,
+      "properties": {
+        "clause_id": {
+          "title": "Clause Id",
+          "type": "string"
+        },
+        "heading": {
+          "title": "Heading",
+          "type": "string"
+        },
+        "reason": {
+          "title": "Reason",
+          "type": "string"
+        }
+      },
+      "required": [
+        "clause_id",
+        "heading",
+        "reason"
+      ],
+      "title": "AmbiguousClause",
+      "type": "object"
+    },
+    "CategoryAnalysis": {
+      "additionalProperties": false,
+      "properties": {
+        "category": {
+          "title": "Category",
+          "type": "string"
+        },
+        "category_risk_level": {
+          "$ref": "#/$defs/OverallRiskLevel"
+        },
+        "findings": {
+          "items": {
+            "$ref": "#/$defs/Finding"
+          },
+          "title": "Findings",
+          "type": "array"
+        }
+      },
+      "required": [
+        "category",
+        "category_risk_level",
+        "findings"
+      ],
+      "title": "CategoryAnalysis",
+      "type": "object"
+    },
+    "DataQualityNotes": {
+      "additionalProperties": false,
+      "properties": {
+        "missing_categories": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Missing Categories",
+          "type": "array"
+        },
+        "ambiguous_clauses": {
+          "items": {
+            "$ref": "#/$defs/AmbiguousClause"
+          },
+          "title": "Ambiguous Clauses",
+          "type": "array"
+        },
+        "notes": {
+          "title": "Notes",
+          "type": "string"
+        }
+      },
+      "required": [
+        "missing_categories",
+        "ambiguous_clauses",
+        "notes"
+      ],
+      "title": "DataQualityNotes",
+      "type": "object"
+    },
+    "Finding": {
+      "additionalProperties": false,
+      "properties": {
+        "clause_id": {
+          "title": "Clause Id",
+          "type": "string"
+        },
+        "heading": {
+          "title": "Heading",
+          "type": "string"
+        },
+        "page": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "integer"
+            }
+          ],
+          "title": "Page"
+        },
+        "raw_excerpt": {
+          "title": "Raw Excerpt",
+          "type": "string"
+        },
+        "summary": {
+          "title": "Summary",
+          "type": "string"
+        },
+        "risk_flag": {
+          "$ref": "#/$defs/FindingRiskLevel"
+        },
+        "risk_reason": {
+          "title": "Risk Reason",
+          "type": "string"
+        },
+        "missing_points": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Missing Points",
+          "type": "array"
+        }
+      },
+      "required": [
+        "clause_id",
+        "heading",
+        "page",
+        "raw_excerpt",
+        "summary",
+        "risk_flag",
+        "risk_reason",
+        "missing_points"
+      ],
+      "title": "Finding",
+      "type": "object"
+    },
+    "FindingRiskLevel": {
+      "enum": [
+        "Low",
+        "Medium",
+        "High"
+      ],
+      "title": "FindingRiskLevel",
+      "type": "string"
+    },
+    "KeyRisk": {
+      "additionalProperties": false,
+      "properties": {
+        "category": {
+          "title": "Category",
+          "type": "string"
+        },
+        "clause_id": {
+          "title": "Clause Id",
+          "type": "string"
+        },
+        "heading": {
+          "title": "Heading",
+          "type": "string"
+        },
+        "page": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "integer"
+            }
+          ],
+          "title": "Page"
+        },
+        "risk_level": {
+          "$ref": "#/$defs/KeyRiskLevel"
+        },
+        "summary": {
+          "title": "Summary",
+          "type": "string"
+        },
+        "suggested_attention": {
+          "title": "Suggested Attention",
+          "type": "string"
+        }
+      },
+      "required": [
+        "category",
+        "clause_id",
+        "heading",
+        "page",
+        "risk_level",
+        "summary",
+        "suggested_attention"
+      ],
+      "title": "KeyRisk",
+      "type": "object"
+    },
+    "KeyRiskLevel": {
+      "enum": [
+        "Low",
+        "Medium",
+        "High",
+        "Critical"
+      ],
+      "title": "KeyRiskLevel",
+      "type": "string"
+    },
+    "OverallRiskLevel": {
+      "enum": [
+        "Low",
+        "Medium",
+        "High",
+        "Critical",
+        "Not_assessed"
+      ],
+      "title": "OverallRiskLevel",
+      "type": "string"
+    },
+    "ProjectSummary": {
+      "additionalProperties": false,
+      "properties": {
+        "project_context": {
+          "title": "Project Context",
+          "type": "string"
+        },
+        "overall_risk_level": {
+          "$ref": "#/$defs/OverallRiskLevel"
+        },
+        "overall_comment": {
+          "title": "Overall Comment",
+          "type": "string"
+        }
+      },
+      "required": [
+        "project_context",
+        "overall_risk_level",
+        "overall_comment"
+      ],
+      "title": "ProjectSummary",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "project_summary": {
+      "$ref": "#/$defs/ProjectSummary"
+    },
+    "per_category_analysis": {
+      "items": {
+        "$ref": "#/$defs/CategoryAnalysis"
+      },
+      "title": "Per Category Analysis",
+      "type": "array"
+    },
+    "key_risks_overall": {
+      "items": {
+        "$ref": "#/$defs/KeyRisk"
+      },
+      "title": "Key Risks Overall",
+      "type": "array"
+    },
+    "data_quality_notes": {
+      "$ref": "#/$defs/DataQualityNotes"
+    }
+  },
+  "required": [
+    "project_summary",
+    "per_category_analysis",
+    "key_risks_overall",
+    "data_quality_notes"
+  ],
+  "title": "TenderAnalysis",
+  "type": "object"
+}

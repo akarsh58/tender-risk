@@ -1,0 +1,20 @@
+[
+  {
+    "clause_id": "PAY-001",
+    "heading": "Payment Terms",
+    "page": 12,
+    "text": "The contractor shall submit monthly bills for work executed. Payment shall be released within 60 days from certification of the bill by the Engineer. No interest shall be payable for delayed payments."
+  },
+  {
+    "clause_id": "TERM-001",
+    "heading": "Project Duration",
+    "page": 5,
+    "text": "The project shall commence on the date specified in the contract and shall be completed within the specified timeline. Extensions may be granted only in writing by the Project Manager."
+  },
+  {
+    "clause_id": "WARRANTY-001",
+    "heading": "Warranty Period",
+    "page": 18,
+    "text": "The contractor warrants that all work shall be free from defects for a period of twelve (12) months from the date of completion. Any defects discovered during this period shall be repaired at no additional cost."
+  }
+]

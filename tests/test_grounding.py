@@ -1,0 +1,94 @@
+import json
+from types import SimpleNamespace
+
+import pytest
+
+from tenderrisk.grounding import GroundingError, validate_grounding
+from tenderrisk.schemas import TenderAnalysis, TenderRequest
+from tenderrisk.service import analyze_tender
+
+
+def request_with_clause() -> TenderRequest:
+    return TenderRequest.model_validate(
+        {
+            "PROJECT_CONTEXT": "Residential build. Perspective: contractor/bidder.",
+            "QUESTION_OR_MODE": "FULL_RISK_SCAN",
+            "RISK_CATEGORIES": ["Payment"],
+            "CONTEXT_CLAUSES": [
+                {
+                    "clause_id": "C-1",
+                    "heading": "Payment",
+                    "page": "2",
+                    "text": "Payment is due within 21 days after certification.",
+                }
+            ],
+        }
+    )
+
+
+def valid_payload() -> dict:
+    return {
+        "project_summary": {
+            "project_context": "Residential build. Perspective: contractor/bidder.",
+            "overall_risk_level": "Medium",
+            "overall_comment": "The supplied payment clause sets a certification trigger. It does not state a payment consequence for delay.",
+        },
+        "per_category_analysis": [
+            {
+                "category": "Payment",
+                "category_risk_level": "Medium",
+                "findings": [
+                    {
+                        "clause_id": "C-1",
+                        "heading": "Payment",
+                        "page": "2",
+                        "raw_excerpt": "Payment is due within 21 days after certification.",
+                        "summary": "Payment depends on certification.",
+                        "risk_flag": "Medium",
+                        "risk_reason": "The clause makes certification the payment trigger.",
+                        "missing_points": [
+                            "Not found in provided clauses: certification process clarification."
+                        ],
+                    }
+                ],
+            }
+        ],
+        "key_risks_overall": [
+            {
+                "category": "Payment",
+                "clause_id": "C-1",
+                "heading": "Payment",
+                "page": "2",
+                "risk_level": "Medium",
+                "summary": "Payment is tied to certification. The supplied clause does not describe the certification process.",
+                "suggested_attention": "Clarify the certification process before bid submission.",
+            }
+        ],
+        "data_quality_notes": {
+            "missing_categories": [],
+            "ambiguous_clauses": [],
+            "notes": "Assessment is limited to the supplied clause.",
+        },
+    }
+
+
+def test_rejects_non_literal_excerpt() -> None:
+    request = request_with_clause()
+    payload = valid_payload()
+    payload["per_category_analysis"][0]["findings"][0]["raw_excerpt"] = "Invented excerpt"
+
+    with pytest.raises(GroundingError, match="literal excerpt"):
+        validate_grounding(TenderAnalysis.model_validate(payload), request)
+
+
+def test_service_accepts_grounded_structured_response() -> None:
+    request = request_with_clause()
+    fake_response = SimpleNamespace(output_text=json.dumps(valid_payload()))
+    fake_client = SimpleNamespace(
+        responses=SimpleNamespace(create=lambda **_: fake_response)
+    )
+
+    result = analyze_tender(request, client=fake_client)
+
+    assert result.per_category_analysis[0].findings[0].clause_id == "C-1"
+
