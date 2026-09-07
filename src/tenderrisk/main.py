@@ -77,6 +77,8 @@ Use `/` for the product overview and this page for interactive API integration.
     ],
 )
 
+MAX_UPLOAD_BYTES = 100 * 1024 * 1024
+
 
 @app.get("/docs", include_in_schema=False)
 def swagger_docs() -> HTMLResponse:
@@ -128,12 +130,12 @@ def health() -> dict[str, str]:
     description=(
         "Upload one PDF, DOCX, DOC, or JSON file. The response shows the extracted clauses "
         "and their page references. Review or edit these clauses before sending them to the "
-        "analysis endpoint. Maximum upload size is 20 MB."
+        "analysis endpoint. Maximum upload size is 100 MB."
     ),
     response_description="Extracted clause objects ready for analysis.",
     responses={
         400: {"description": "Unsupported file type or document extraction failed."},
-        413: {"description": "The uploaded file is larger than 20 MB."},
+        413: {"description": "The uploaded file is larger than 100 MB."},
         422: {"description": "No file was supplied."},
     },
 )
@@ -152,8 +154,8 @@ async def extract_document(
         )
 
     content = await file.read()
-    if len(content) > 20 * 1024 * 1024:
-        raise HTTPException(status_code=413, detail="The uploaded file must be 20 MB or smaller.")
+    if len(content) > MAX_UPLOAD_BYTES:
+        raise HTTPException(status_code=413, detail="The uploaded file must be 100 MB or smaller.")
 
     temporary_path: Path | None = None
     try:

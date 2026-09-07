@@ -130,7 +130,7 @@ Start the API and open `http://127.0.0.1:8000/docs`.
 5. Copy the returned `clauses` array into `POST /v1/tender-risk/analyze`.
 
 The upload endpoint extracts text locally and returns clause IDs, headings, page references,
-and source text. It accepts files up to 20 MB. Review extracted clauses before analysis because
+and source text. It accepts files up to 100 MB. Review extracted clauses before analysis because
 scanned PDFs may require OCR and document splitting is intentionally lightweight.
 
 ## Running locally
