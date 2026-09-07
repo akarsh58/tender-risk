@@ -212,14 +212,19 @@ def _looks_like_heading(line: str) -> bool:
     text = line.strip()
     if not text or len(text) > 120:
         return False
-    if re.fullmatch(r"(?:[0-9]+(?:\.[0-9]+)*|[A-Z][A-Za-z0-9&/()\- ]+)", text):
+    if re.fullmatch(r"[0-9]+(?:\.[0-9]+)*", text):
         return True
     if re.fullmatch(r"(?:Section|Clause|Article|Part|Subclause|Item|Schedule)\s*[:\-]?[\w\d\s\&/()\-\.]*", text, re.IGNORECASE):
         return True
     lower = text.lower()
-    if lower in RISK_KEYWORDS:
+    if lower in RISK_KEYWORDS or any(
+        lower.startswith(f"{keyword} ") for keyword in RISK_KEYWORDS
+    ):
         return True
-    if any(keyword in lower for keyword in RISK_KEYWORDS):
+    if re.fullmatch(
+        r"[A-Z][a-z0-9&/()\-]*(?:\s+[A-Z][a-z0-9&/()\-]*){0,9}",
+        text,
+    ):
         return True
     return False
 
