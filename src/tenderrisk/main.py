@@ -7,6 +7,7 @@ from tempfile import NamedTemporaryFile
 from fastapi import FastAPI, File, HTTPException, UploadFile
 from fastapi.openapi.docs import get_swagger_ui_html
 from fastapi.responses import HTMLResponse
+from fastapi.responses import Response
 from fastapi.staticfiles import StaticFiles
 
 from .document_loader import (
@@ -15,6 +16,7 @@ from .document_loader import (
     load_clauses_from_json,
 )
 from .output_schema import tender_analysis_schema
+from .pdf_report import render_analysis_pdf
 from .schemas import DocumentExtraction, TenderAnalysis, TenderRequest
 from .service import AnalysisServiceError, analyze_tender
 
@@ -214,6 +216,31 @@ async def analyze(request: TenderRequest) -> TenderAnalysis:
         return await asyncio.to_thread(analyze_tender, request)
     except AnalysisServiceError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+
+@app.post(
+    "/v1/tender-risk/report.pdf",
+    tags=["Tender risk analysis"],
+    summary="Analyze clauses and download a PDF report",
+    description="Runs the grounded analysis and returns the result as a downloadable PDF file.",
+    responses={
+        200: {"content": {"application/pdf": {}}},
+        422: {"description": "The request shape is invalid."},
+        502: {"description": "The configured model provider could not return a valid analysis."},
+    },
+)
+async def download_report(request: TenderRequest) -> Response:
+    try:
+        analysis = await asyncio.to_thread(analyze_tender, request)
+        pdf = await asyncio.to_thread(render_analysis_pdf, analysis)
+    except AnalysisServiceError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+    return Response(
+        content=pdf,
+        media_type="application/pdf",
+        headers={"Content-Disposition": "attachment; filename=tenderrisk-report.pdf"},
+    )
 
 
 website_dir = Path(__file__).resolve().parents[2] / "website"

@@ -56,3 +56,20 @@ def test_document_upload_rejects_malformed_json() -> None:
 
     assert response.status_code == 400
     assert "Could not read valid JSON" in response.json()["detail"]
+
+
+def test_empty_analysis_can_be_downloaded_as_pdf() -> None:
+    response = TestClient(app).post(
+        "/v1/tender-risk/report.pdf",
+        json={
+            "PROJECT_CONTEXT": "A contractor-side tender review.",
+            "QUESTION_OR_MODE": "FULL_RISK_SCAN",
+            "RISK_CATEGORIES": ["Payment"],
+            "CONTEXT_CLAUSES": [],
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.headers["content-type"] == "application/pdf"
+    assert "attachment" in response.headers["content-disposition"]
+    assert response.content.startswith(b"%PDF")

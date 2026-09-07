@@ -133,6 +133,9 @@ The upload endpoint extracts text locally and returns clause IDs, headings, page
 and source text. It accepts files up to 100 MB. Review extracted clauses before analysis because
 scanned PDFs may require OCR and document splitting is intentionally lightweight.
 
+To download a report, send the same request body to `POST /v1/tender-risk/report.pdf`.
+The endpoint returns a downloadable PDF containing the grounded analysis.
+
 ## Running locally
 
 1. Create a Python 3.11+ virtual environment.
