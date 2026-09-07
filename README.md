@@ -32,7 +32,7 @@ TenderRisk is a contractor-side tender risk analysis service. It accepts retriev
 - `src/tenderrisk/output_schema.py` – JSON schema used by structured outputs.
 - `src/tenderrisk/prompts/system.md` – system prompt used for the model.
 - `examples/sample-request.json` – example API request payload.
-- `load_documents.py` – helper to read JSON and PDF files from the `pdfs/` folder.
+- `src/tenderrisk/document_loader.py` – document extraction for PDF, DOCX, DOC, and JSON files.
 - `analyze_real_documents.py` – example script using real clauses from local files.
 - `tests/` – automated tests for API and grounding validation.
 - `docs/` – documentation and contract examples.

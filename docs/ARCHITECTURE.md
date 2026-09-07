@@ -96,7 +96,7 @@ The service does not accept a generic AI summary. It requires the model to show 
 
 The project supports a light local document pipeline:
 
-- `load_documents.py` reads JSON files and PDF files from the `pdfs/` folder.
+- `src/tenderrisk/document_loader.py` reads supported document files and extracts clause objects.
 - `analyze_real_documents.py` loads all available documents and calls the analysis service.
 
 This is meant for testing and local experimentation, not production document ingestion.

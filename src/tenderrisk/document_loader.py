@@ -10,6 +10,11 @@ from pathlib import Path
 
 from tenderrisk.schemas import Clause
 
+
+class DocumentLoadError(ValueError):
+    """Raised when a document cannot be parsed into valid clause data."""
+
+
 try:
     import docx  # type: ignore
 except ImportError:  # pragma: no cover
@@ -277,26 +282,34 @@ def extract_clauses_from_pdf(pdf_path: str) -> list[Clause]:
 
 
 def load_clauses_from_json(json_path: str) -> list[Clause]:
-    """Load clauses from a JSON file."""
+    """Load a JSON clause array, failing explicitly when it is invalid."""
     try:
         with open(json_path, "r", encoding="utf-8") as handle:
             data = json.load(handle)
-    except Exception as exc:  # pragma: no cover
-        print(f"Error loading JSON {json_path}: {exc}")
-        return []
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise DocumentLoadError(f"Could not read valid JSON from {json_path}: {exc}") from exc
+
+    if not isinstance(data, list):
+        raise DocumentLoadError("JSON document must contain an array of clause objects.")
 
     clauses: list[Clause] = []
     for clause_data in data:
         if not isinstance(clause_data, dict):
-            continue
-        clauses.append(
-            Clause(
-                clause_id=str(clause_data.get("clause_id", "")),
-                heading=str(clause_data.get("heading", "")),
-                page=clause_data.get("page", 1),
-                text=str(clause_data.get("text", "")),
+            raise DocumentLoadError("Every JSON array item must be a clause object.")
+        try:
+            clauses.append(
+                Clause(
+                    clause_id=str(clause_data.get("clause_id", "")),
+                    heading=str(clause_data.get("heading", "")),
+                    page=clause_data.get("page", 1),
+                    text=str(clause_data.get("text", "")),
+                )
             )
-        )
+        except ValueError as exc:
+            raise DocumentLoadError(f"Invalid clause object: {exc}") from exc
+
+    if not clauses:
+        raise DocumentLoadError("JSON document did not contain any clause objects.")
     return clauses
 
 

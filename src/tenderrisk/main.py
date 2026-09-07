@@ -8,7 +8,11 @@ from fastapi.openapi.docs import get_swagger_ui_html
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 
-from load_documents import extract_clauses_from_document, load_clauses_from_json
+from .document_loader import (
+    DocumentLoadError,
+    extract_clauses_from_document,
+    load_clauses_from_json,
+)
 from .output_schema import tender_analysis_schema
 from .schemas import DocumentExtraction, TenderAnalysis, TenderRequest
 from .service import AnalysisServiceError, analyze_tender
@@ -158,7 +162,7 @@ async def extract_document(
             clauses = load_clauses_from_json(str(temporary_path))
         else:
             clauses = extract_clauses_from_document(str(temporary_path))
-    except (OSError, ValueError, ImportError) as exc:
+    except (DocumentLoadError, OSError, ValueError, ImportError) as exc:
         raise HTTPException(status_code=400, detail=f"Could not extract clauses: {exc}") from exc
     finally:
         if "temporary_path" in locals():

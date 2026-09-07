@@ -3,7 +3,7 @@
 import json
 import sys
 
-from load_documents import load_all_documents
+from tenderrisk.document_loader import load_all_documents
 from tenderrisk.schemas import TenderRequest
 from tenderrisk.service import analyze_tender
 

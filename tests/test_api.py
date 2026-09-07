@@ -46,3 +46,13 @@ def test_document_upload_extracts_json_clauses() -> None:
     assert body["document_type"] == "JSON"
     assert body["clause_count"] == 1
     assert body["clauses"][0]["clause_id"] == "PAY-001"
+
+
+def test_document_upload_rejects_malformed_json() -> None:
+    response = TestClient(app).post(
+        "/v1/tender-risk/extract",
+        files={"file": ("broken.json", b'{"not": "a clause array"', "application/json")},
+    )
+
+    assert response.status_code == 400
+    assert "Could not read valid JSON" in response.json()["detail"]
