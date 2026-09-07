@@ -23,6 +23,67 @@ TenderRisk is a contractor-side tender risk analysis service. It accepts retriev
 6. `grounding.py` validates that every cited clause, heading, page, and raw excerpt matches the user-provided clauses.
 7. A final `TenderAnalysis` object is returned to the caller.
 
+## How the complete workflow works
+
+### 1. Upload and extract
+
+Use `POST /v1/tender-risk/extract` when you want to inspect or edit the extracted clauses.
+The API accepts PDF, DOCX, legacy DOC, and JSON files. Uploaded files are limited to 100 MB,
+stored temporarily, processed locally, and deleted in a `finally` block.
+
+The document loader uses:
+
+- **PyMuPDF** first for PDF text extraction.
+- **pdfplumber** and **PyPDF2** as PDF fallbacks.
+- **python-docx** for DOCX files.
+- **antiword**, **LibreOffice**, or **pypandoc/Pandoc** for legacy DOC files.
+- A lightweight heading and page heuristic to create clause objects.
+
+Scanned or nearly empty documents report an OCR-related extraction error. Extracted clauses
+should be reviewed because document splitting is intentionally heuristic.
+
+### 2. Analyze
+
+Use `POST /v1/tender-risk/analyze` when you already have a `TenderRequest`. The synchronous
+provider call runs in a worker thread so it does not block FastAPI's event loop.
+
+The service layer:
+
+1. Selects OpenRouter when `OPENROUTER_API_KEY` is configured, otherwise OpenAI when
+   `OPENAI_API_KEY` is configured.
+2. Loads and caches the system prompt and strict output schema.
+3. Requests structured JSON through the OpenAI-compatible Responses API.
+4. Retries transient provider failures with bounded exponential backoff.
+5. Parses normal JSON, fenced JSON, Responses API output, and Chat Completions output.
+6. Normalizes common model field aliases before Pydantic validation.
+
+If no context clauses are supplied, the API returns a deterministic `Not_assessed` response
+without calling a provider.
+
+### 3. Download a PDF report
+
+Use `POST /v1/tender-risk/report.pdf` with the same JSON request as `/analyze` to receive a
+downloadable `tenderrisk-report.pdf`.
+
+For the complete one-step workflow, use `POST /v1/tender-risk/report-from-document.pdf`.
+This multipart endpoint accepts the document plus `project_context`, `question_or_mode`, and
+comma-separated `risk_categories`; it extracts clauses, validates the request, analyzes it,
+and returns the PDF directly.
+
+The PDF renderer uses PyMuPDF and provides wrapped text, consistent margins, automatic page
+breaks, section hierarchy, evidence labels, and page footers.
+
+## Validation and error behavior
+
+- **400**: unsupported file type or document extraction failure.
+- **413**: upload exceeds 100 MB.
+- **422**: malformed request fields, duplicate categories, too many clauses, or oversized clause text.
+- **502**: the configured model provider fails or returns unusable output.
+
+Grounding remains strict: cited clause IDs, headings, and normalized page values must refer to
+the submitted clauses. Evidence matching tolerates case and repeated whitespace, but still
+requires the excerpt to be present in the original source text.
+
 ## Project structure
 
 - `src/tenderrisk/main.py` – FastAPI entrypoints.
@@ -155,6 +216,13 @@ PDF report automatically.
    set OPENROUTER_API_KEY=your_api_key
    ```
 
+   On PowerShell, use:
+
+   ```powershell
+   $env:OPENROUTER_API_KEY="your_api_key"
+   $env:OPENROUTER_MODEL="openrouter/free"
+   ```
+
 4. Start the API:
 
    ```bash
@@ -170,8 +238,13 @@ PDF report automatically.
 ## Test
 
 ```bash
-pytest
+python -m pytest -q
 ```
+
+The test suite covers API health and upload behavior, malformed JSON, deterministic empty
+analysis, PDF responses, automated document-to-PDF workflow, request size limits, page
+normalization, grounding tolerance, aggregated grounding errors, extraction heuristics,
+transient provider retries, and schema validation.
 
 ## Example checks
 

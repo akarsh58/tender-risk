@@ -24,8 +24,11 @@ TenderRisk is a contract-risk analysis service for contractor-side tender review
 FastAPI application. It defines:
 
 - `GET /health`
+- `POST /v1/tender-risk/extract`
 - `GET /v1/tender-risk/output-schema`
 - `POST /v1/tender-risk/analyze`
+- `POST /v1/tender-risk/report.pdf`
+- `POST /v1/tender-risk/report-from-document.pdf`
 
 ### `src/tenderrisk/schemas.py`
 
@@ -63,9 +66,31 @@ Performs local validation:
 - raw excerpt is present in the clause text
 - ambiguous clauses are tracked
 
+Page values are canonicalized to strings and excerpt matching normalizes case and whitespace
+before checking literal source containment. Validation reports all detected violations together.
+
 ### `src/tenderrisk/output_schema.py`
 
 Generates the strict JSON schema used by the model call. This is the guardrail behind `text.format.type: json_schema`.
+The generated schema is cached for the process lifetime.
+
+### `src/tenderrisk/pdf_report.py`
+
+Renders validated `TenderAnalysis` objects to PDF using PyMuPDF. The renderer wraps text,
+applies fixed margins, adds headings and section rules, starts new pages when needed, and adds
+page-number footers.
+
+## Endpoint selection
+
+| Endpoint | Input | Output | Use when |
+| --- | --- | --- | --- |
+| `/v1/tender-risk/extract` | Multipart document | JSON clauses | You want to review/edit extraction |
+| `/v1/tender-risk/analyze` | JSON `TenderRequest` | JSON analysis | You already have clauses |
+| `/v1/tender-risk/report.pdf` | JSON `TenderRequest` | PDF download | You already have clauses and want a report |
+| `/v1/tender-risk/report-from-document.pdf` | Multipart document + form fields | PDF download | You want upload-to-report in one step |
+
+The document-to-report endpoint shares the same extraction helper as `/extract`, so file type
+checks, the 100 MB limit, temporary-file cleanup, and parser behavior stay consistent.
 
 ### `src/tenderrisk/prompts/system.md`
 
