@@ -27,23 +27,75 @@ class KeyRiskLevel(str, Enum):
 
 
 class Clause(BaseModel):
+    """One source clause supplied for evidence-grounded review."""
+
     model_config = ConfigDict(extra="forbid")
 
-    clause_id: str = Field(min_length=1)
-    heading: str = ""
-    page: str | int
-    text: str = Field(min_length=1)
+    clause_id: str = Field(
+        min_length=1,
+        description="Your stable identifier for the clause, such as PY-10.3.",
+        examples=["PY-10.3"],
+    )
+    heading: str = Field(
+        default="",
+        description="The clause heading exactly as it appears in the tender.",
+        examples=["10.3 Interim Payments"],
+    )
+    page: str | int = Field(
+        description="Page number or source page label.",
+        examples=[10],
+    )
+    text: str = Field(
+        min_length=1,
+        description="The complete source text used to ground findings.",
+        examples=["The Employer shall pay the certified amount within 14 days."],
+    )
 
 
 class TenderRequest(BaseModel):
-    """Request payload using the field names in the TenderRisk input template."""
+    """Input for one contractor-side tender risk review."""
 
-    model_config = ConfigDict(extra="forbid", populate_by_name=True)
+    model_config = ConfigDict(
+        extra="forbid",
+        populate_by_name=True,
+        json_schema_extra={
+            "example": {
+                "PROJECT_CONTEXT": "Public works contract for a G+5 residential building.",
+                "QUESTION_OR_MODE": "FULL_RISK_SCAN",
+                "RISK_CATEGORIES": ["Payment Terms", "Delay", "Termination"],
+                "CONTEXT_CLAUSES": [
+                    {
+                        "clause_id": "PY-10.3",
+                        "heading": "10.3 Interim Payments",
+                        "page": 10,
+                        "text": "The Employer shall pay the certified amount within 14 days.",
+                    }
+                ],
+            }
+        },
+    )
 
-    project_context: str = Field(alias="PROJECT_CONTEXT")
-    question_or_mode: str = Field(alias="QUESTION_OR_MODE", min_length=1)
-    risk_categories: list[str] = Field(alias="RISK_CATEGORIES", min_length=1)
-    context_clauses: list[Clause] = Field(alias="CONTEXT_CLAUSES")
+    project_context: str = Field(
+        alias="PROJECT_CONTEXT",
+        description="Short project and contract context from the contractor's perspective.",
+        examples=["Public works contract for a G+5 residential building."],
+    )
+    question_or_mode: str = Field(
+        alias="QUESTION_OR_MODE",
+        min_length=1,
+        description="Use FULL_RISK_SCAN for a complete review, or describe a focused question.",
+        examples=["FULL_RISK_SCAN"],
+    )
+    risk_categories: list[str] = Field(
+        alias="RISK_CATEGORIES",
+        min_length=1,
+        description="The commercial risk areas to assess. Each category must be unique.",
+        examples=[["Payment Terms", "Delay", "Termination"]],
+    )
+    context_clauses: list[Clause] = Field(
+        alias="CONTEXT_CLAUSES",
+        description="Retrieved tender clauses. Findings can cite only these clauses.",
+    )
 
     @field_validator("risk_categories")
     @classmethod
@@ -61,6 +113,17 @@ class TenderRequest(BaseModel):
         if len(set(clause_ids)) != len(clause_ids):
             raise ValueError("context clause IDs must be unique")
         return clauses
+
+
+class DocumentExtraction(BaseModel):
+    """Clauses extracted from one uploaded tender document."""
+
+    filename: str = Field(description="Name of the uploaded document.")
+    document_type: str = Field(description="Detected file type, such as PDF or DOCX.")
+    clause_count: int = Field(description="Number of extracted clause objects.")
+    clauses: list[Clause] = Field(
+        description="Extracted clauses ready to send to the analysis endpoint."
+    )
 
 
 class ProjectSummary(BaseModel):

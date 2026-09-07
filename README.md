@@ -5,6 +5,7 @@ TenderRisk is a contractor-side tender risk analysis service. It accepts retriev
 ## What this project does
 
 - Exposes a FastAPI API for tender risk analysis.
+- Provides a Swagger upload endpoint for PDF, DOCX, DOC, and JSON documents.
 - Accepts a request shaped like `TenderRequest`.
 - Validates supplied clauses before running any model call.
 - Calls the OpenAI-compatible Responses API with strict JSON schema output.
@@ -15,11 +16,12 @@ TenderRisk is a contractor-side tender risk analysis service. It accepts retriev
 ## High-level flow
 
 1. The caller sends a payload to `POST /v1/tender-risk/analyze`.
-2. FastAPI validates the request using Pydantic models in `schemas.py`.
-3. `service.py` builds a client and sends a structured prompt to the model.
-4. The model is forced to return JSON that matches the schema in `output_schema.py`.
-5. `grounding.py` validates that every cited clause, heading, page, and raw excerpt matches the user-provided clauses.
-6. A final `TenderAnalysis` object is returned to the caller.
+2. A document can first be uploaded to `POST /v1/tender-risk/extract`.
+3. FastAPI validates the request using Pydantic models in `schemas.py`.
+4. `service.py` builds a client and sends a structured prompt to the model.
+5. The model is forced to return JSON that matches the schema in `output_schema.py`.
+6. `grounding.py` validates that every cited clause, heading, page, and raw excerpt matches the user-provided clauses.
+7. A final `TenderAnalysis` object is returned to the caller.
 
 ## Project structure
 
@@ -116,6 +118,20 @@ Example JSON format:
 ```
 
 The sample workflow is in `analyze_real_documents.py`.
+
+### Upload through Swagger
+
+Start the API and open `http://127.0.0.1:8000/docs`.
+
+1. Expand `POST /v1/tender-risk/extract`.
+2. Click **Try it out**.
+3. Choose a `.pdf`, `.docx`, `.doc`, or `.json` file in the `file` field.
+4. Click **Execute**.
+5. Copy the returned `clauses` array into `POST /v1/tender-risk/analyze`.
+
+The upload endpoint extracts text locally and returns clause IDs, headings, page references,
+and source text. It accepts files up to 20 MB. Review extracted clauses before analysis because
+scanned PDFs may require OCR and document splitting is intentionally lightweight.
 
 ## Running locally
 
