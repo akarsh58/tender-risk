@@ -81,6 +81,36 @@ def test_rejects_non_literal_excerpt() -> None:
         validate_grounding(TenderAnalysis.model_validate(payload), request)
 
 
+def test_normalizes_numeric_page_labels() -> None:
+    request = request_with_clause()
+    payload = valid_payload()
+    payload["per_category_analysis"][0]["findings"][0]["page"] = 2
+    payload["key_risks_overall"][0]["page"] = 2
+
+    result = validate_grounding(TenderAnalysis.model_validate(payload), request)
+
+    assert result.per_category_analysis[0].findings[0].page == 2
+
+
+def test_reports_all_grounding_violations() -> None:
+    request = request_with_clause()
+    payload = valid_payload()
+    finding = payload["per_category_analysis"][0]["findings"][0]
+    finding["heading"] = "Wrong heading"
+    finding["raw_excerpt"] = "Invented excerpt"
+    finding["missing_points"] = ["Missing wording"]
+    payload["key_risks_overall"][0]["page"] = 99
+
+    with pytest.raises(GroundingError) as error:
+        validate_grounding(TenderAnalysis.model_validate(payload), request)
+
+    message = str(error.value)
+    assert "heading does not match clause C-1" in message
+    assert "raw_excerpt is not a literal excerpt from clause C-1" in message
+    assert "missing_points must use the required wording in clause C-1" in message
+    assert "page does not match clause C-1" in message
+
+
 def test_service_accepts_grounded_structured_response() -> None:
     request = request_with_clause()
     fake_response = SimpleNamespace(output_text=json.dumps(valid_payload()))
@@ -91,4 +121,3 @@ def test_service_accepts_grounded_structured_response() -> None:
     result = analyze_tender(request, client=fake_client)
 
     assert result.per_category_analysis[0].findings[0].clause_id == "C-1"
-

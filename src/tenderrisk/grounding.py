@@ -2,11 +2,21 @@
 
 from __future__ import annotations
 
+import re
+
 from .schemas import TenderAnalysis, TenderRequest
 
 
 class GroundingError(ValueError):
     """Raised when a model response cites evidence outside supplied clauses."""
+
+
+def _normalize_page(page: str | int) -> str:
+    """Normalize numeric page labels while preserving non-numeric labels."""
+    value = str(page).strip()
+    if re.fullmatch(r"\d+", value):
+        return str(int(value))
+    return value.casefold()
 
 
 def empty_context_analysis(request: TenderRequest) -> TenderAnalysis:
@@ -44,37 +54,47 @@ def empty_context_analysis(request: TenderRequest) -> TenderAnalysis:
 
 def validate_grounding(analysis: TenderAnalysis, request: TenderRequest) -> TenderAnalysis:
     """Reject analyses that do not faithfully reference the supplied clause set."""
+    violations: list[str] = []
+
     if analysis.project_summary.project_context != request.project_context:
-        raise GroundingError("project_context does not match the submitted request")
+        violations.append("project_context does not match the submitted request")
 
     returned_categories = [item.category for item in analysis.per_category_analysis]
     if returned_categories != request.risk_categories:
-        raise GroundingError("per_category_analysis must contain requested categories in order")
+        violations.append("per_category_analysis must contain requested categories in order")
 
     clause_by_id = {clause.clause_id: clause for clause in request.context_clauses}
 
     def check_reference(clause_id: str, heading: str, page: str | int) -> None:
         clause = clause_by_id.get(clause_id)
         if clause is None:
-            raise GroundingError(f"unknown clause ID: {clause_id}")
+            violations.append(f"unknown clause ID: {clause_id}")
+            return
         if heading != clause.heading:
-            raise GroundingError(f"heading does not match clause {clause_id}")
-        if page != clause.page:
-            raise GroundingError(f"page does not match clause {clause_id}")
+            violations.append(f"heading does not match clause {clause_id}")
+        if _normalize_page(page) != _normalize_page(clause.page):
+            violations.append(f"page does not match clause {clause_id}")
 
     for category in analysis.per_category_analysis:
         for finding in category.findings:
             check_reference(finding.clause_id, finding.heading, finding.page)
-            source_text = clause_by_id[finding.clause_id].text
+            clause = clause_by_id.get(finding.clause_id)
+            if clause is None:
+                continue
+            source_text = clause.text
             if not finding.raw_excerpt or finding.raw_excerpt not in source_text:
-                raise GroundingError(
+                violations.append(
                     f"raw_excerpt is not a literal excerpt from clause {finding.clause_id}"
                 )
             if len(finding.raw_excerpt.split()) > 60:
-                raise GroundingError("raw_excerpt must not exceed 60 words")
+                violations.append(
+                    f"raw_excerpt must not exceed 60 words in clause {finding.clause_id}"
+                )
             for missing_point in finding.missing_points:
                 if not missing_point.startswith("Not found in provided clauses:"):
-                    raise GroundingError("missing_points must use the required wording")
+                    violations.append(
+                        f"missing_points must use the required wording in clause {finding.clause_id}"
+                    )
 
     for key_risk in analysis.key_risks_overall:
         check_reference(key_risk.clause_id, key_risk.heading, key_risk.page)
@@ -82,6 +102,12 @@ def validate_grounding(analysis: TenderAnalysis, request: TenderRequest) -> Tend
     for ambiguous_clause in analysis.data_quality_notes.ambiguous_clauses:
         clause = clause_by_id.get(ambiguous_clause.clause_id)
         if clause is None or ambiguous_clause.heading != clause.heading:
-            raise GroundingError("ambiguous_clauses must cite a supplied clause exactly")
+            violations.append(
+                "ambiguous_clauses must cite a supplied clause exactly: "
+                f"{ambiguous_clause.clause_id}"
+            )
+
+    if violations:
+        raise GroundingError("Grounding validation failed:\n- " + "\n- ".join(violations))
 
     return analysis

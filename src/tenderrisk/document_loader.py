@@ -135,14 +135,20 @@ def extract_text_from_docx(docx_path: str) -> str:
 
 def extract_text_from_doc(doc_path: str) -> str:
     """Extract text from a legacy DOC file using system tools when available."""
+    attempted_tools: list[str] = []
+    failures: list[str] = []
+
     antiword = shutil.which("antiword")
     if antiword:
+        attempted_tools.append("antiword")
         result = subprocess.run([antiword, str(doc_path)], capture_output=True, text=True, check=False)
         if result.returncode == 0 and result.stdout.strip():
             return result.stdout
+        failures.append(f"antiword exited with status {result.returncode}")
 
     soffice = shutil.which("soffice") or shutil.which("libreoffice")
     if soffice:
+        attempted_tools.append(Path(soffice).name)
         source = Path(doc_path)
         output_dir = source.parent
         convert_cmd = [
@@ -158,6 +164,7 @@ def extract_text_from_doc(doc_path: str) -> str:
         txt_path = source.with_suffix(".txt")
         if txt_path.exists():
             return txt_path.read_text(encoding="utf-8", errors="ignore")
+        failures.append("LibreOffice conversion did not produce a text file")
 
     try:
         import pypandoc  # type: ignore
@@ -165,11 +172,28 @@ def extract_text_from_doc(doc_path: str) -> str:
         pypandoc = None
 
     if pypandoc is not None:
-        converted = pypandoc.convert_file(str(doc_path), "plain")
-        if converted and converted.strip():
-            return converted
+        attempted_tools.append("pypandoc")
+        try:
+            converted = pypandoc.convert_file(str(doc_path), "plain")
+        except (OSError, RuntimeError) as exc:
+            failures.append(f"pypandoc failed: {exc}")
+        else:
+            if converted and converted.strip():
+                return converted
+            failures.append("pypandoc returned no text")
 
-    raise ImportError("No DOC extraction tool is available. Install antiword, LibreOffice, or pypandoc.")
+    if not attempted_tools:
+        raise ImportError(
+            "Cannot extract legacy .doc files: none of the supported tools are installed. "
+            "Install antiword, LibreOffice, or pypandoc with Pandoc."
+        )
+
+    details = "; ".join(failures) if failures else "all attempted tools failed"
+    raise ImportError(
+        "Could not extract the legacy .doc file. "
+        f"Tried {', '.join(attempted_tools)} ({details}). "
+        "Install/configure antiword, LibreOffice, or pypandoc with Pandoc and retry."
+    )
 
 
 def extract_text_from_any_document(path: str) -> str:
