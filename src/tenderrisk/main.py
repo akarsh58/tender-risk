@@ -4,7 +4,7 @@ import asyncio
 from pathlib import Path
 from tempfile import NamedTemporaryFile
 
-from fastapi import FastAPI, File, HTTPException, UploadFile
+from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.openapi.docs import get_swagger_ui_html
 from fastapi.responses import HTMLResponse
 from fastapi.responses import Response
@@ -235,6 +235,76 @@ async def download_report(request: TenderRequest) -> Response:
         pdf = await asyncio.to_thread(render_analysis_pdf, analysis)
     except AnalysisServiceError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+    return Response(
+        content=pdf,
+        media_type="application/pdf",
+        headers={"Content-Disposition": "attachment; filename=tenderrisk-report.pdf"},
+    )
+
+
+@app.post(
+    "/v1/tender-risk/report-from-document.pdf",
+    tags=["Document ingestion"],
+    summary="Upload a tender and download its PDF risk report",
+    description=(
+        "Uploads a PDF, DOCX, DOC, or JSON tender, extracts clauses, analyzes them, "
+        "and returns the PDF report in one step. No copying between endpoints is required."
+    ),
+    responses={
+        200: {"content": {"application/pdf": {}}},
+        400: {"description": "Unsupported file type or document extraction failed."},
+        413: {"description": "The uploaded file is larger than 100 MB."},
+        502: {"description": "The configured model provider could not return a valid analysis."},
+    },
+)
+async def report_from_document(
+    file: UploadFile = File(description="Tender document in PDF, DOCX, DOC, or JSON format."),
+    project_context: str = Form(description="Short project and contractor-side context."),
+    question_or_mode: str = Form(default="FULL_RISK_SCAN"),
+    risk_categories: str = Form(
+        default="Payment Terms, Extension of Time and Delay, Termination Rights, Force Majeure, Claims and Variations",
+        description="Comma-separated risk categories.",
+    ),
+) -> Response:
+    filename = Path(file.filename or "").name
+    suffix = Path(filename).suffix.lower()
+    if not filename or suffix not in {".pdf", ".docx", ".doc", ".json"}:
+        raise HTTPException(
+            status_code=400,
+            detail="Supported file types are .pdf, .docx, .doc, and .json.",
+        )
+
+    content = await file.read()
+    if len(content) > MAX_UPLOAD_BYTES:
+        raise HTTPException(status_code=413, detail="The uploaded file must be 100 MB or smaller.")
+
+    temporary_path: Path | None = None
+    try:
+        with NamedTemporaryFile(suffix=suffix, delete=False) as temporary_file:
+            temporary_file.write(content)
+            temporary_path = Path(temporary_file.name)
+        if suffix == ".json":
+            clauses = load_clauses_from_json(str(temporary_path))
+        else:
+            clauses = extract_clauses_from_document(str(temporary_path))
+        request = TenderRequest.model_validate(
+            {
+                "PROJECT_CONTEXT": project_context,
+                "QUESTION_OR_MODE": question_or_mode,
+                "RISK_CATEGORIES": [item.strip() for item in risk_categories.split(",") if item.strip()],
+                "CONTEXT_CLAUSES": [clause.model_dump() for clause in clauses],
+            }
+        )
+        analysis = await asyncio.to_thread(analyze_tender, request)
+        pdf = await asyncio.to_thread(render_analysis_pdf, analysis)
+    except (DocumentLoadError, OSError, ValueError, ImportError) as exc:
+        raise HTTPException(status_code=400, detail=f"Could not process document: {exc}") from exc
+    except AnalysisServiceError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    finally:
+        if temporary_path is not None:
+            temporary_path.unlink(missing_ok=True)
 
     return Response(
         content=pdf,

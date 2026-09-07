@@ -11,7 +11,7 @@
       '<strong>First successful call</strong>' +
       '<span>1</span> Check service status' +
       '<span>2</span> Upload your tender file' +
-      '<span>3</span> Send extracted clauses for analysis';
+      '<span>3</span> Download a PDF report automatically';
     info.appendChild(guide);
   }
 

@@ -1,5 +1,6 @@
 from fastapi.testclient import TestClient
 
+from tenderrisk.grounding import empty_context_analysis
 from tenderrisk.main import app
 
 
@@ -72,4 +73,27 @@ def test_empty_analysis_can_be_downloaded_as_pdf() -> None:
     assert response.status_code == 200
     assert response.headers["content-type"] == "application/pdf"
     assert "attachment" in response.headers["content-disposition"]
+    assert response.content.startswith(b"%PDF")
+
+
+def test_document_upload_can_extract_analyze_and_download_pdf(monkeypatch) -> None:
+    monkeypatch.setattr("tenderrisk.main.analyze_tender", empty_context_analysis)
+    response = TestClient(app).post(
+        "/v1/tender-risk/report-from-document.pdf",
+        data={
+            "project_context": "A contractor-side tender review.",
+            "question_or_mode": "FULL_RISK_SCAN",
+            "risk_categories": "Payment",
+        },
+        files={
+            "file": (
+                "tender.json",
+                b'[{"clause_id":"PAY-001","heading":"Payment","page":3,"text":"Payment is due within 30 days."}]',
+                "application/json",
+            )
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.headers["content-type"] == "application/pdf"
     assert response.content.startswith(b"%PDF")

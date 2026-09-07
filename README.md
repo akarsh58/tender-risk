@@ -136,6 +136,10 @@ scanned PDFs may require OCR and document splitting is intentionally lightweight
 To download a report, send the same request body to `POST /v1/tender-risk/report.pdf`.
 The endpoint returns a downloadable PDF containing the grounded analysis.
 
+For the shortest workflow, use `POST /v1/tender-risk/report-from-document.pdf` in Swagger.
+Upload the document, enter project context, and the API extracts, analyzes, and downloads the
+PDF report automatically.
+
 ## Running locally
 
 1. Create a Python 3.11+ virtual environment.
