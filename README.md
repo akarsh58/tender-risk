@@ -167,4 +167,3 @@ This project deliberately does not search the web or upload a full tender. The c
 
 - A call with no context clauses returns a deterministic `Not_assessed` result without invoking the model.
 - This is an analytical aid and not legal advice.
-
