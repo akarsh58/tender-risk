@@ -1,5 +1,6 @@
 """HTTP entry point for TenderRisk."""
 
+import asyncio
 from pathlib import Path
 from tempfile import NamedTemporaryFile
 
@@ -205,9 +206,9 @@ def output_schema() -> dict:
         502: {"description": "The configured model provider could not return a valid analysis."},
     },
 )
-def analyze(request: TenderRequest) -> TenderAnalysis:
+async def analyze(request: TenderRequest) -> TenderAnalysis:
     try:
-        return analyze_tender(request)
+        return await asyncio.to_thread(analyze_tender, request)
     except AnalysisServiceError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
 

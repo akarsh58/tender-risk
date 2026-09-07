@@ -1,10 +1,12 @@
 """OpenAI Structured Outputs schema used by the analysis call."""
 
 from typing import Any
+from functools import lru_cache
 
 from .schemas import TenderAnalysis
 
 
+@lru_cache(maxsize=1)
 def tender_analysis_schema() -> dict[str, Any]:
     """Return the JSON Schema passed to the Responses API with strict mode."""
     return TenderAnalysis.model_json_schema()
@@ -21,4 +23,3 @@ def response_text_format() -> dict[str, Any]:
             "schema": tender_analysis_schema(),
         }
     }
-

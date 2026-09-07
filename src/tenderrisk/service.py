@@ -2,6 +2,7 @@
 
 import json
 import os
+from functools import lru_cache
 from importlib.resources import files
 from typing import Any
 
@@ -20,6 +21,7 @@ class AnalysisServiceError(RuntimeError):
     """A safe-to-display failure while generating a tender analysis."""
 
 
+@lru_cache(maxsize=1)
 def system_prompt() -> str:
     return (
         files("tenderrisk")
