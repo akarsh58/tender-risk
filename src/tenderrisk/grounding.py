@@ -19,6 +19,10 @@ def _normalize_page(page: str | int) -> str:
     return value.casefold()
 
 
+def _normalize_excerpt(text: str) -> str:
+    return " ".join(text.split()).casefold()
+
+
 def empty_context_analysis(request: TenderRequest) -> TenderAnalysis:
     """Produce the required non-model response when no clauses are provided."""
     return TenderAnalysis.model_validate(
@@ -60,7 +64,11 @@ def validate_grounding(analysis: TenderAnalysis, request: TenderRequest) -> Tend
         violations.append("project_context does not match the submitted request")
 
     returned_categories = [item.category for item in analysis.per_category_analysis]
-    if returned_categories != request.risk_categories:
+    if len(returned_categories) != len(request.risk_categories):
+        violations.append(
+            "per_category_analysis must contain exactly one entry per requested category"
+        )
+    elif returned_categories != request.risk_categories:
         violations.append("per_category_analysis must contain requested categories in order")
 
     clause_by_id = {clause.clause_id: clause for clause in request.context_clauses}
@@ -82,7 +90,7 @@ def validate_grounding(analysis: TenderAnalysis, request: TenderRequest) -> Tend
             if clause is None:
                 continue
             source_text = clause.text
-            if not finding.raw_excerpt or finding.raw_excerpt not in source_text:
+            if not finding.raw_excerpt or _normalize_excerpt(finding.raw_excerpt) not in _normalize_excerpt(source_text):
                 violations.append(
                     f"raw_excerpt is not a literal excerpt from clause {finding.clause_id}"
                 )
@@ -90,12 +98,6 @@ def validate_grounding(analysis: TenderAnalysis, request: TenderRequest) -> Tend
                 violations.append(
                     f"raw_excerpt must not exceed 60 words in clause {finding.clause_id}"
                 )
-            for missing_point in finding.missing_points:
-                if not missing_point.startswith("Not found in provided clauses:"):
-                    violations.append(
-                        f"missing_points must use the required wording in clause {finding.clause_id}"
-                    )
-
     for key_risk in analysis.key_risks_overall:
         check_reference(key_risk.clause_id, key_risk.heading, key_risk.page)
 

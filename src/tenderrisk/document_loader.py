@@ -278,6 +278,10 @@ def _split_pdf_into_sections(pdf_text: str) -> list[tuple[str, str, int]]:
 def extract_clauses_from_document(file_path: str) -> list[Clause]:
     """Extract clause-like sections from a supported document file."""
     text = extract_text_from_any_document(file_path)
+    if len(_clean_text(text)) < 100:
+        raise DocumentLoadError(
+            "Very little text was extracted. The file may be scanned and require OCR."
+        )
     sections = _split_pdf_into_sections(text)
 
     clauses: list[Clause] = []

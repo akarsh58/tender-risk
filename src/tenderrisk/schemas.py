@@ -5,6 +5,12 @@ from enum import Enum
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
+def _normalize_page_value(value: object) -> str:
+    if value is None:
+        raise ValueError("page is required")
+    return str(value).strip()
+
+
 class OverallRiskLevel(str, Enum):
     LOW = "Low"
     MEDIUM = "Medium"
@@ -33,23 +39,31 @@ class Clause(BaseModel):
 
     clause_id: str = Field(
         min_length=1,
+        max_length=100,
         description="Your stable identifier for the clause, such as PY-10.3.",
         examples=["PY-10.3"],
     )
     heading: str = Field(
         default="",
+        max_length=500,
         description="The clause heading exactly as it appears in the tender.",
         examples=["10.3 Interim Payments"],
     )
-    page: str | int = Field(
+    page: str = Field(
         description="Page number or source page label.",
-        examples=[10],
+        examples=["10"],
     )
     text: str = Field(
         min_length=1,
+        max_length=10000,
         description="The complete source text used to ground findings.",
         examples=["The Employer shall pay the certified amount within 14 days."],
     )
+
+    @field_validator("page", mode="before")
+    @classmethod
+    def normalize_page(cls, value: object) -> str:
+        return _normalize_page_value(value)
 
 
 class TenderRequest(BaseModel):
@@ -94,6 +108,7 @@ class TenderRequest(BaseModel):
     )
     context_clauses: list[Clause] = Field(
         alias="CONTEXT_CLAUSES",
+        max_length=200,
         description="Retrieved tender clauses. Findings can cite only these clauses.",
     )
 
@@ -139,12 +154,17 @@ class Finding(BaseModel):
 
     clause_id: str
     heading: str
-    page: str | int
+    page: str
     raw_excerpt: str
     summary: str
     risk_flag: FindingRiskLevel
     risk_reason: str
     missing_points: list[str]
+
+    @field_validator("page", mode="before")
+    @classmethod
+    def normalize_page(cls, value: object) -> str:
+        return _normalize_page_value(value)
 
 
 class CategoryAnalysis(BaseModel):
@@ -161,10 +181,15 @@ class KeyRisk(BaseModel):
     category: str
     clause_id: str
     heading: str
-    page: str | int
+    page: str
     risk_level: KeyRiskLevel
     summary: str
     suggested_attention: str
+
+    @field_validator("page", mode="before")
+    @classmethod
+    def normalize_page(cls, value: object) -> str:
+        return _normalize_page_value(value)
 
 
 class AmbiguousClause(BaseModel):

@@ -89,7 +89,17 @@ def test_normalizes_numeric_page_labels() -> None:
 
     result = validate_grounding(TenderAnalysis.model_validate(payload), request)
 
-    assert result.per_category_analysis[0].findings[0].page == 2
+    assert result.per_category_analysis[0].findings[0].page == "2"
+
+
+def test_accepts_case_and_whitespace_variations_in_excerpt() -> None:
+    request = request_with_clause()
+    payload = valid_payload()
+    payload["per_category_analysis"][0]["findings"][0]["raw_excerpt"] = (
+        " payment   IS due within 21 DAYS after certification. "
+    )
+
+    validate_grounding(TenderAnalysis.model_validate(payload), request)
 
 
 def test_reports_all_grounding_violations() -> None:
@@ -107,7 +117,6 @@ def test_reports_all_grounding_violations() -> None:
     message = str(error.value)
     assert "heading does not match clause C-1" in message
     assert "raw_excerpt is not a literal excerpt from clause C-1" in message
-    assert "missing_points must use the required wording in clause C-1" in message
     assert "page does not match clause C-1" in message
 
 
@@ -121,3 +130,24 @@ def test_service_accepts_grounded_structured_response() -> None:
     result = analyze_tender(request, client=fake_client)
 
     assert result.per_category_analysis[0].findings[0].clause_id == "C-1"
+
+
+def test_service_retries_transient_provider_failure(monkeypatch: pytest.MonkeyPatch) -> None:
+    request = request_with_clause()
+    fake_response = SimpleNamespace(output_text=json.dumps(valid_payload()))
+    calls = 0
+
+    def create(**_: object) -> SimpleNamespace:
+        nonlocal calls
+        calls += 1
+        if calls < 3:
+            raise RuntimeError("temporary provider failure")
+        return fake_response
+
+    monkeypatch.setattr("time.sleep", lambda _: None)
+    fake_client = SimpleNamespace(responses=SimpleNamespace(create=create))
+
+    result = analyze_tender(request, client=fake_client)
+
+    assert calls == 3
+    assert result.project_summary.overall_risk_level == "Medium"

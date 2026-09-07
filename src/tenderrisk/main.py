@@ -155,6 +155,7 @@ async def extract_document(
     if len(content) > 20 * 1024 * 1024:
         raise HTTPException(status_code=413, detail="The uploaded file must be 20 MB or smaller.")
 
+    temporary_path: Path | None = None
     try:
         with NamedTemporaryFile(suffix=suffix, delete=False) as temporary_file:
             temporary_file.write(content)
@@ -166,7 +167,7 @@ async def extract_document(
     except (DocumentLoadError, OSError, ValueError, ImportError) as exc:
         raise HTTPException(status_code=400, detail=f"Could not extract clauses: {exc}") from exc
     finally:
-        if "temporary_path" in locals():
+        if temporary_path is not None:
             temporary_path.unlink(missing_ok=True)
 
     return DocumentExtraction(

@@ -100,8 +100,13 @@ def _parse_response_content(response: Any) -> dict:
     if not isinstance(content, str) or not content.strip():
         raise AnalysisServiceError("The provider returned empty text content.")
 
-    if content.startswith("```"):
-        content = content.strip("`").strip()
+    if content.lstrip().startswith("```"):
+        lines = content.strip().splitlines()
+        if lines and lines[0].strip().startswith("```"):
+            lines = lines[1:]
+        if lines and lines[-1].strip().startswith("```"):
+            lines = lines[:-1]
+        content = "\n".join(lines).strip()
         if content.lower().startswith("json"):
             content = content[4:].strip()
 
