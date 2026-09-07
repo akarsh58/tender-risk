@@ -9,6 +9,7 @@ from fastapi.openapi.docs import get_swagger_ui_html
 from fastapi.responses import HTMLResponse
 from fastapi.responses import Response
 from fastapi.staticfiles import StaticFiles
+from pydantic import ValidationError
 
 from .document_loader import (
     DocumentLoadError,
@@ -17,7 +18,7 @@ from .document_loader import (
 )
 from .output_schema import tender_analysis_schema
 from .pdf_report import render_analysis_pdf
-from .schemas import DocumentExtraction, TenderAnalysis, TenderRequest
+from .schemas import Clause, DocumentExtraction, TenderAnalysis, TenderRequest
 from .service import AnalysisServiceError, analyze_tender
 
 app = FastAPI(
@@ -80,6 +81,39 @@ Use `/` for the product overview and this page for interactive API integration.
 )
 
 MAX_UPLOAD_BYTES = 100 * 1024 * 1024
+ALLOWED_UPLOAD_SUFFIXES = {".pdf", ".docx", ".doc", ".json"}
+
+
+async def _extract_uploaded_clauses(file: UploadFile) -> tuple[str, list[Clause]]:
+    """Validate and extract one uploaded document consistently across endpoints."""
+    filename = Path(file.filename or "").name
+    suffix = Path(filename).suffix.lower()
+    if not filename or suffix not in ALLOWED_UPLOAD_SUFFIXES:
+        raise HTTPException(
+            status_code=400,
+            detail="Supported file types are .pdf, .docx, .doc, and .json.",
+        )
+
+    content = await file.read()
+    if len(content) > MAX_UPLOAD_BYTES:
+        raise HTTPException(status_code=413, detail="The uploaded file must be 100 MB or smaller.")
+
+    temporary_path: Path | None = None
+    try:
+        with NamedTemporaryFile(suffix=suffix, delete=False) as temporary_file:
+            temporary_file.write(content)
+            temporary_path = Path(temporary_file.name)
+        if suffix == ".json":
+            clauses = load_clauses_from_json(str(temporary_path))
+        else:
+            clauses = extract_clauses_from_document(str(temporary_path))
+    except (DocumentLoadError, OSError, ValueError, ImportError) as exc:
+        raise HTTPException(status_code=400, detail=f"Could not extract clauses: {exc}") from exc
+    finally:
+        if temporary_path is not None:
+            temporary_path.unlink(missing_ok=True)
+
+    return filename, clauses
 
 
 @app.get("/docs", include_in_schema=False)
@@ -146,37 +180,11 @@ async def extract_document(
         description="Tender document in PDF, DOCX, DOC, or JSON format.",
     ),
 ) -> DocumentExtraction:
-    filename = Path(file.filename or "").name
-    suffix = Path(filename).suffix.lower()
-    allowed_suffixes = {".pdf", ".docx", ".doc", ".json"}
-    if not filename or suffix not in allowed_suffixes:
-        raise HTTPException(
-            status_code=400,
-            detail="Supported file types are .pdf, .docx, .doc, and .json.",
-        )
-
-    content = await file.read()
-    if len(content) > MAX_UPLOAD_BYTES:
-        raise HTTPException(status_code=413, detail="The uploaded file must be 100 MB or smaller.")
-
-    temporary_path: Path | None = None
-    try:
-        with NamedTemporaryFile(suffix=suffix, delete=False) as temporary_file:
-            temporary_file.write(content)
-            temporary_path = Path(temporary_file.name)
-        if suffix == ".json":
-            clauses = load_clauses_from_json(str(temporary_path))
-        else:
-            clauses = extract_clauses_from_document(str(temporary_path))
-    except (DocumentLoadError, OSError, ValueError, ImportError) as exc:
-        raise HTTPException(status_code=400, detail=f"Could not extract clauses: {exc}") from exc
-    finally:
-        if temporary_path is not None:
-            temporary_path.unlink(missing_ok=True)
+    filename, clauses = await _extract_uploaded_clauses(file)
 
     return DocumentExtraction(
         filename=filename,
-        document_type=suffix.removeprefix(".").upper(),
+        document_type=Path(filename).suffix.removeprefix(".").upper(),
         clause_count=len(clauses),
         clauses=clauses,
     )
@@ -267,27 +275,8 @@ async def report_from_document(
         description="Comma-separated risk categories.",
     ),
 ) -> Response:
-    filename = Path(file.filename or "").name
-    suffix = Path(filename).suffix.lower()
-    if not filename or suffix not in {".pdf", ".docx", ".doc", ".json"}:
-        raise HTTPException(
-            status_code=400,
-            detail="Supported file types are .pdf, .docx, .doc, and .json.",
-        )
-
-    content = await file.read()
-    if len(content) > MAX_UPLOAD_BYTES:
-        raise HTTPException(status_code=413, detail="The uploaded file must be 100 MB or smaller.")
-
-    temporary_path: Path | None = None
+    _, clauses = await _extract_uploaded_clauses(file)
     try:
-        with NamedTemporaryFile(suffix=suffix, delete=False) as temporary_file:
-            temporary_file.write(content)
-            temporary_path = Path(temporary_file.name)
-        if suffix == ".json":
-            clauses = load_clauses_from_json(str(temporary_path))
-        else:
-            clauses = extract_clauses_from_document(str(temporary_path))
         request = TenderRequest.model_validate(
             {
                 "PROJECT_CONTEXT": project_context,
@@ -298,13 +287,18 @@ async def report_from_document(
         )
         analysis = await asyncio.to_thread(analyze_tender, request)
         pdf = await asyncio.to_thread(render_analysis_pdf, analysis)
-    except (DocumentLoadError, OSError, ValueError, ImportError) as exc:
-        raise HTTPException(status_code=400, detail=f"Could not process document: {exc}") from exc
+    except ValidationError as exc:
+        detail = [
+            {
+                "loc": error["loc"],
+                "msg": error["msg"],
+                "type": error["type"],
+            }
+            for error in exc.errors()
+        ]
+        raise HTTPException(status_code=422, detail=detail) from exc
     except AnalysisServiceError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
-    finally:
-        if temporary_path is not None:
-            temporary_path.unlink(missing_ok=True)
 
     return Response(
         content=pdf,

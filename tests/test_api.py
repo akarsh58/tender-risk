@@ -97,3 +97,24 @@ def test_document_upload_can_extract_analyze_and_download_pdf(monkeypatch) -> No
     assert response.status_code == 200
     assert response.headers["content-type"] == "application/pdf"
     assert response.content.startswith(b"%PDF")
+
+
+def test_document_report_returns_422_for_invalid_request_fields() -> None:
+    response = TestClient(app).post(
+        "/v1/tender-risk/report-from-document.pdf",
+        data={
+            "project_context": "A contractor-side tender review.",
+            "question_or_mode": "FULL_RISK_SCAN",
+            "risk_categories": "Payment, Payment",
+        },
+        files={
+            "file": (
+                "tender.json",
+                b'[{"clause_id":"PAY-001","heading":"Payment","page":3,"text":"Payment is due within 30 days."}]',
+                "application/json",
+            )
+        },
+    )
+
+    assert response.status_code == 422
+    assert "risk categories must be unique" in response.text
