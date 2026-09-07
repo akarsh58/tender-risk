@@ -32,14 +32,18 @@ def _build_client(client: Any | None = None) -> Any:
     if client is not None:
         return client
 
-    api_key = os.getenv("OPENROUTER_API_KEY") or os.getenv("OPENAI_API_KEY")
-    if not api_key:
+    openrouter_key = os.getenv("OPENROUTER_API_KEY")
+    openai_key = os.getenv("OPENAI_API_KEY")
+
+    if not (openrouter_key or openai_key):
         raise AnalysisServiceError("OPENROUTER_API_KEY or OPENAI_API_KEY is not set.")
 
-    return OpenAI(
-        api_key=api_key,
-        base_url="https://openrouter.ai/api/v1",
-    )
+    # Prefer OpenRouter if explicitly configured; otherwise use the OpenAI key
+    if openrouter_key:
+        return OpenAI(api_key=openrouter_key, base_url="https://openrouter.ai/api/v1")
+
+    # If only OPENAI_API_KEY is set, rely on the OpenAI SDK defaults (do not override base_url)
+    return OpenAI(api_key=openai_key)
 
 
 def _parse_response_content(response: Any) -> dict:
@@ -523,29 +527,57 @@ Rules:
         analysis = TenderAnalysis.model_validate(normalized)
         return validate_grounding(analysis, request)
 
-    try:
-        return _run_once()
-    except (json.JSONDecodeError, ValidationError, GroundingError, AnalysisServiceError):
+    # Bounded retries with exponential backoff for transient provider failures.
+    max_attempts = 3
+    base_backoff = 0.8
+    last_exc: Exception | None = None
+
+    for attempt in range(1, max_attempts + 1):
         try:
-            return _run_once(
-                "Return only valid JSON matching the required schema exactly. "
-                "Use only the exact field names required by the schema. "
-                "Every missing_points item must start with 'Not found in provided clauses:'. "
-                "Do not include recommended_action, overall_assessment, scope_notes, "
-                "finding_id, title, evidence, or missing_protections. "
-                "Use the exact clause heading and exact clause page from the provided context. "
-                "raw_excerpt must be a literal substring from the cited clause and no more than 60 words. "
-                "Do not include markdown fences or extra text."
-            )
-        except (json.JSONDecodeError, ValidationError, GroundingError, AnalysisServiceError) as exc:
-            raise AnalysisServiceError(
-                f"The generated analysis failed validation: {exc}"
-            ) from exc
+            return _run_once()
+        except (GroundingError, ValidationError):
+            # These are deterministic validation errors — do not retry.
+            raise
+        except AnalysisServiceError as exc:
+            last_exc = exc
+            if attempt < max_attempts:
+                import time, random
+
+                wait = base_backoff * (2 ** (attempt - 1))
+                time.sleep(wait + random.random() * 0.3)
+                continue
+            break
         except Exception as exc:
-            raise AnalysisServiceError(
-                f"The analysis provider fallback failed: {type(exc).__name__}: {exc}"
-            ) from exc
+            last_exc = exc
+            if attempt < max_attempts:
+                import time, random
+
+                wait = base_backoff * (2 ** (attempt - 1))
+                time.sleep(wait + random.random() * 0.3)
+                continue
+            break
+
+    # If all retries exhausted, attempt the stricter guidance fallback once.
+    try:
+        return _run_once(
+            "Return only valid JSON matching the required schema exactly. "
+            "Use only the exact field names required by the schema. "
+            "Every missing_points item must start with 'Not found in provided clauses:'. "
+            "Do not include recommended_action, overall_assessment, scope_notes, "
+            "finding_id, title, evidence, or missing_protections. "
+            "Use the exact clause heading and exact clause page from the provided context. "
+            "raw_excerpt must be a literal substring from the cited clause and no more than 60 words. "
+            "Do not include markdown fences or extra text."
+        )
+    except (json.JSONDecodeError, ValidationError, GroundingError, AnalysisServiceError) as exc:
+        raise AnalysisServiceError(
+            f"The generated analysis failed validation: {exc}"
+        ) from exc
     except Exception as exc:
+        if last_exc is not None:
+            raise AnalysisServiceError(
+                f"Provider failures after retries: {type(last_exc).__name__}: {last_exc}; fallback: {type(exc).__name__}: {exc}"
+            ) from exc
         raise AnalysisServiceError(
             f"The analysis provider could not complete the request: {type(exc).__name__}: {exc}"
         ) from exc
