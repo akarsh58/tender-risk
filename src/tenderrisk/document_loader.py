@@ -60,6 +60,7 @@ RISK_KEYWORDS = {
     "liability",
     "indemnity",
 }
+MAX_EXTRACTED_CLAUSES = 200
 
 
 def _clean_text(value: str) -> str:
@@ -288,6 +289,19 @@ def extract_clauses_from_document(file_path: str) -> list[Clause]:
             "Very little text was extracted. The file may be scanned and require OCR."
         )
     sections = _split_pdf_into_sections(text)
+    if len(sections) > MAX_EXTRACTED_CLAUSES:
+        grouped_sections: list[tuple[str, str, int]] = []
+        bucket_size = (len(sections) + MAX_EXTRACTED_CLAUSES - 1) // MAX_EXTRACTED_CLAUSES
+        for start in range(0, len(sections), bucket_size):
+            bucket = sections[start : start + bucket_size]
+            grouped_sections.append(
+                (
+                    bucket[0][0],
+                    " ".join(section[1] for section in bucket),
+                    bucket[0][2],
+                )
+            )
+        sections = grouped_sections
 
     clauses: list[Clause] = []
     for idx, (heading, body, page_num) in enumerate(sections, start=1):
