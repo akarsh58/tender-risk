@@ -1,5 +1,41 @@
 # TenderRisk
 
+> **Construction document-intelligence portfolio project:** extracts tender clauses and produces grounded, clause-cited risk analysis through a FastAPI service.
+
+## Recruiter snapshot
+
+**Target roles:** AEC Automation Engineer · Construction AI Engineer · Digital Engineering · Document Intelligence / Applied AI
+
+**What this project demonstrates**
+- Applying LLMs to a domain-specific construction workflow instead of free-form chat.
+- Parsing PDF/DOCX tender documents into structured clause records.
+- Strict schema-driven outputs with local grounding checks against source clauses.
+- Evidence-first risk findings with clause IDs, headings, pages and source excerpts.
+- FastAPI service design, validation, retries, provider abstraction and PDF reporting.
+- Safety-conscious automation: missing evidence is reported rather than invented.
+
+**Core stack:** Python · FastAPI · Pydantic · PyMuPDF · pdfplumber · python-docx · structured LLM outputs · Docker · pytest
+
+### Workflow
+
+```text
+Tender PDF / DOCX / JSON
+        ↓
+Clause extraction
+        ↓
+Structured TenderRequest
+        ↓
+LLM risk analysis
+        ↓
+Local grounding validation
+        ↓
+Clause-cited findings
+        ↓
+API response / PDF report
+```
+
+---
+
 TenderRisk is a contractor-side tender risk analysis service. It accepts retrieved tender clauses only and produces a structured, clause-cited risk assessment. It is designed to support bid review, not legal advice.
 
 ## What this project does
